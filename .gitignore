@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+
+# Environment variables — NEVER commit
+.env
+.env.*
+!.env.example
+
+# Circle secrets — NEVER commit
+.circle/
+*recovery*
+*recovery_file*
+
+# Foundry
+contracts/out/
+contracts/cache/
+
+# Misc
+.DS_Store
+*.log
