@@ -13,6 +13,17 @@ Thank you for your interest in contributing to EarthSwap!
 
 ## Development setup
 
-```bash
-bun install
-bun run dev
+Install dependencies and start the dev server:
+
+    bun install
+    bun run dev
+
+Open https://earthswap.netlify.app in your browser to see the live app.
+
+## Smart contracts
+
+Contracts are in the contracts/ directory. Built with Foundry.
+
+## Questions
+
+Open an issue at https://github.com/saquib104/earthswap/issues
