@@ -28,7 +28,7 @@ export default function App() {
 
         {/* All other tabs: standard centred container */}
         {activeTab !== 'home' && (
-          <div className="mx-auto max-w-4xl px-4 py-8 pb-24 lg:pb-8">
+          <div className="mx-auto max-w-4xl px-4 py-8 pb-36 lg:pb-8">
             {activeTab === 'trade'    && <SwapCard />}
             {activeTab === 'bridge'   && <BridgeView />}
             {activeTab === 'markets'  && <MarketsView />}

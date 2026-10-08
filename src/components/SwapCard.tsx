@@ -13,6 +13,29 @@ import {
   ARC_TOKENS, ARC_CHAIN_ID, UNISWAP_ADDRESSES,
   AUTO_ROUTE_FEE_TIERS, feeToLabel, type Token, type FeeTier,
 } from '@/constants/tokens'
+
+// EarthSwapRouter — deployed on Arc mainnet, earns 0.15% protocol fee
+const EARTHSWAP_ROUTER = '0x23ACd156ea1A85C40631b6314fEFa9C9D369f427' as const
+
+const EARTHSWAP_ROUTER_ABI = [
+  {
+    inputs: [{ components: [
+      { name: 'tokenIn',           type: 'address' },
+      { name: 'tokenOut',          type: 'address' },
+      { name: 'fee',               type: 'uint24'  },
+      { name: 'recipient',         type: 'address' },
+      { name: 'deadline',          type: 'uint256' },
+      { name: 'amountIn',          type: 'uint256' },
+      { name: 'amountOutMinimum',  type: 'uint256' },
+      { name: 'sqrtPriceLimitX96', type: 'uint160' },
+    ], name: 'params', type: 'tuple' }],
+    name: 'swapExactInputSingle',
+    outputs: [{ name: 'amountOut', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const
+
 import { useTokenBalance } from '@/hooks/useTokenBalance'
 import { buildTxExplorerUrl, requireChain } from '@/onchain-facts'
 
@@ -37,23 +60,6 @@ const QUOTER_V2_ABI = [
   },
 ] as const
 
-const SWAP_ROUTER_ABI = [
-  {
-    inputs: [{ components: [
-      { name: 'tokenIn', type: 'address' },
-      { name: 'tokenOut', type: 'address' },
-      { name: 'fee', type: 'uint24' },
-      { name: 'recipient', type: 'address' },
-      { name: 'amountIn', type: 'uint256' },
-      { name: 'amountOutMinimum', type: 'uint256' },
-      { name: 'sqrtPriceLimitX96', type: 'uint160' },
-    ], name: 'params', type: 'tuple' }],
-    name: 'exactInputSingle',
-    outputs: [{ name: 'amountOut', type: 'uint256' }],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-] as const
 
 const DEFAULT_SLIPPAGE = 50
 const QUOTE_EXPIRY_SECONDS = 15
@@ -192,7 +198,7 @@ export function SwapCard() {
     address: tokenIn.address as `0x${string}`,
     abi: erc20Abi,
     functionName: 'allowance',
-    args: address ? [address, UNISWAP_ADDRESSES.swapRouter02 as `0x${string}`] : undefined,
+    args: address ? [address, EARTHSWAP_ROUTER] : undefined,
     chainId: ARC_CHAIN_ID,
     query: { enabled: !!address && parsedAmountIn > 0n },
   })
@@ -290,21 +296,23 @@ export function SwapCard() {
   const handleSwap = () => {
     if (!address || !quote) return
     const amountOutMin = quote.amountOut * BigInt(10000 - slippage) / 10000n
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300) // 5 min
     swap({
-      address: UNISWAP_ADDRESSES.swapRouter02,
-      abi: SWAP_ROUTER_ABI,
-      functionName: 'exactInputSingle',
+      address: EARTHSWAP_ROUTER,
+      abi: EARTHSWAP_ROUTER_ABI,
+      functionName: 'swapExactInputSingle',
       args: [{
         tokenIn: tokenIn.address as `0x${string}`,
         tokenOut: tokenOut.address as `0x${string}`,
         fee: quote.fee,
         recipient: address,
+        deadline,
         amountIn: parsedAmountIn,
         amountOutMinimum: amountOutMin,
         sqrtPriceLimitX96: 0n,
       }],
       chainId: ARC_CHAIN_ID,
-      gas: 300000n,
+      gas: 350000n,
       maxFeePerGas: 25000000000n,
     })
   }
@@ -337,7 +345,7 @@ export function SwapCard() {
     if (!isConnected) return
     if (isWrongChain) { switchChain({ chainId: ARC_CHAIN_ID }); return }
     if (needsApproval) {
-      approve({ address: tokenIn.address as `0x${string}`, abi: erc20Abi, functionName: 'approve', args: [UNISWAP_ADDRESSES.swapRouter02 as `0x${string}`, parsedAmountIn], chainId: ARC_CHAIN_ID })
+      approve({ address: tokenIn.address as `0x${string}`, abi: erc20Abi, functionName: 'approve', args: [EARTHSWAP_ROUTER, parsedAmountIn], chainId: ARC_CHAIN_ID })
       return
     }
     handleSwap()
