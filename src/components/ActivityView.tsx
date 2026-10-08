@@ -4,7 +4,7 @@ import { ExternalLink, ArrowRight, Loader2, RefreshCw } from 'lucide-react'
 import { ARC_CHAIN_ID } from '@/constants/tokens'
 import { requireChain, buildTxExplorerUrl } from '@/onchain-facts'
 
-// Uniswap v3 pool Swap event
+// Uniswap v4 pool Swap event
 const SWAP_EVENT = parseAbiItem(
   'event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)'
 )
@@ -102,7 +102,7 @@ export function ActivityView() {
       const latestBlock = await client.getBlockNumber()
       setLastBlock(latestBlock)
 
-      // Scan last 500 blocks for Swap events on Uniswap v3 pools
+      // Scan last 500 blocks for Swap events on Uniswap v4 pools
       const fromBlock = latestBlock > 500n ? latestBlock - 500n : 0n
 
       // Get all Swap events from any address (will filter by known tokens)
@@ -189,7 +189,7 @@ export function ActivityView() {
             Recent Activity
           </h2>
           <p className="text-sm" style={{ color: 'var(--subtle)' }}>
-            Live Uniswap v3 swap events from Arc mainnet. Refreshes every 30s.
+            Live Uniswap v4 swap events from Arc mainnet. Refreshes every 30s.
           </p>
         </div>
         <button

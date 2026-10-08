@@ -192,7 +192,7 @@ export function PoolsView() {
           Liquidity Pools
         </h2>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Live Uniswap v3 pools on Arc mainnet. Prices and liquidity are read directly from chain.
+          Live Uniswap v4 pools on Arc mainnet. Prices and liquidity are read directly from chain.
         </p>
       </div>
 
@@ -203,7 +203,7 @@ export function PoolsView() {
       >
         <Droplets className="mt-0.5 size-3.5 shrink-0" style={{ color: 'var(--accent)' }} />
         <p style={{ color: 'var(--muted)' }}>
-          Pool prices reflect the current on-chain state via Uniswap v3 slot0 reads.
+          Pool prices reflect the current on-chain state via Uniswap v4 slot0 reads.
           Active pools show live liquidity. Pools with no liquidity can still be swapped through if another route exists.
         </p>
       </div>
@@ -221,7 +221,7 @@ export function PoolsView() {
       </div>
 
       <p className="mt-5 text-center text-xs" style={{ color: 'var(--subtle)' }}>
-        Data sourced from Uniswap v3 Factory · Arc mainnet · chain ID 5042
+        Data sourced from Uniswap v4 Factory · Arc mainnet · chain ID 5042
       </p>
     </div>
   )

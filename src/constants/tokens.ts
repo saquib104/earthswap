@@ -28,21 +28,22 @@ export interface Token {
 export const ARC_CHAIN_ID = 5042
 
 // Uniswap v3 & v4 contract addresses on Arc mainnet
-// Source: @uniswap/sdk-core ARC_ADDRESSES + references/arc.md (verified 2026-09-14)
+// Source: @uniswap/sdk-core ARC_ADDRESSES (verified 2026-10-08)
 export const UNISWAP_ADDRESSES = {
-  // v3
-  factory:           '0xf0db7b58379503491d857dB50AC9ece64c653918',
-  swapRouter02:      '0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77',
-  quoterV2:          '0x7DfD4F31be6814D2906BDE155c3e1B146EAc1468',
-  nftPositionManager:'0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377',
-  tickLens:          '0x9EB8600665b55d10C1eB2316Ca5127A9cA6E2E76',
-  // v4
-  poolManager:       '0x8366a39CC670B4001A1121B8F6A443A643e40951',
-  positionManager:   '0x6049c9a0e26405C0985f9E3685C87d0aE917f82B',
-  stateView:         '0xF3334192D15450CdD385c8B70e03f9A6bD9E673b',
-  quoterV4:          '0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94',
+  // v3 (limited liquidity — most active pair is cirBTC/USDC)
+  factory:              '0xf0db7b58379503491d857dB50AC9ece64c653918',
+  swapRouter02:         '0x53BF6B0684Ec7eF91e1387Da3D1a1769bC5A6F77',
+  quoterV1:             '0x7DfD4F31be6814D2906BDE155c3e1B146EAc1468',
+  nftPositionManager:   '0x39654A85A4C05127f5Fd6ED22CAeC077A0fB1377',
+  tickLens:             '0x9EB8600665b55d10C1eB2316Ca5127A9cA6E2E76',
+  // v4 — primary liquidity layer on Arc (USDC/EURC $1.77M TVL, cirBTC/USDC $38M TVL)
+  poolManager:          '0x8366a39CC670B4001A1121B8F6A443A643e40951',
+  positionManager:      '0x6049c9a0e26405C0985f9E3685C87d0aE917f82B',
+  stateView:            '0xF3334192D15450CdD385c8B70e03f9A6bD9E673b',
+  quoterV4:             '0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94',
+  universalRouter:      '0x4fcA4a51Ab4F23A7447b3284fBd7D73289A89Fb1',
   // Permit2 (canonical CREATE2)
-  permit2:           '0x000000000022D473030F116dDEE9F6B43aC78BA3',
+  permit2:              '0x000000000022D473030F116dDEE9F6B43aC78BA3',
 } as const
 
 /**

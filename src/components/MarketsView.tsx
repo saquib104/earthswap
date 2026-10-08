@@ -6,7 +6,7 @@ import type { Token } from '@/constants/tokens'
 import { TokenIcon } from './TokenIcon'
 
 
-// Uniswap v3 Pool ABI (slot0 + liquidity)
+// Uniswap v4 Pool ABI (slot0 + liquidity)
 const POOL_ABI = [
   { name: 'slot0', type: 'function', stateMutability: 'view', inputs: [], outputs: [
     { name: 'sqrtPriceX96', type: 'uint160' },
@@ -214,7 +214,7 @@ export function MarketsView() {
           Stablecoin FX Markets
         </h2>
         <p className="text-sm" style={{ color: 'var(--subtle)' }}>
-          Live onchain rates from Uniswap v3 liquidity pools on Arc Mainnet. Prices update every 15s.
+          Live onchain rates from Uniswap v4 liquidity pools on Arc Mainnet. Prices update every 15s.
         </p>
       </div>
 

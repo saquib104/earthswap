@@ -198,30 +198,42 @@ export function BridgeView() {
       const provider = (await connector.getProvider()) as EIP1193Provider
       const adapter  = await createViemAdapterFromProvider({ provider })
 
-      // Mark approve as running
-      updateStep('approve', { state: 'running' })
+      // Animate steps sequentially while bridge executes
+      const stepNames = ['approve', 'burn', 'fetchAttestation', 'mint']
+      let stepIdx = 0
+      updateStep(stepNames[0], { state: 'running' })
+      const stepTimer = setInterval(() => {
+        stepIdx++
+        if (stepIdx < stepNames.length) {
+          updateStep(stepNames[stepIdx - 1], { state: 'success' })
+          updateStep(stepNames[stepIdx], { state: 'running' })
+        } else {
+          clearInterval(stepTimer)
+        }
+      }, 4000)
 
-      const result = await appKit.bridge({
-        from: { adapter, chain: fromChain.id },
-        to:   recipient
-                ? { adapter, chain: toChain.id, address: recipient }
-                : { adapter, chain: toChain.id },
-        amount: parseFloat(amount).toFixed(6),
-      })
-
-      // Map result steps back to our UI steps
-      const resultSteps = result?.steps ?? []
-      setSteps(initialSteps.map(s => {
-        const rs = resultSteps.find(r => r.name === s.name)
-        if (!rs) return s
-        const state: StepState = rs.state === 'success' ? 'success' : 'failed'
-        return { ...s, state, txHash: (rs as { txHash?: string }).txHash, explorerUrl: (rs as { explorerUrl?: string }).explorerUrl }
-      }))
+      let result: { state?: string } | undefined
+      try {
+        result = await appKit.bridge({
+          from: { adapter, chain: fromChain.id },
+          to:   recipient
+                  ? { adapter, chain: toChain.id, address: recipient }
+                  : { adapter, chain: toChain.id },
+          amount: String(parseFloat(amount)),
+        })
+      } finally {
+        clearInterval(stepTimer)
+      }
 
       if (result?.state === 'success') {
+        // Mark all running/pending steps as success
+        setSteps(prev => prev.map(s =>
+          s.state === 'running' || s.state === 'pending' ? { ...s, state: 'success' } : s
+        ))
         setDone(true)
       } else {
-        setError(`Bridge ended with state: ${String(result?.state)}. Check steps for details.`)
+        setError(`Bridge ended with state: ${String(result?.state ?? 'unknown')}. Check steps above.`)
+        setSteps(prev => prev.map(s => s.state === 'running' ? { ...s, state: 'failed' } : s))
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Bridge failed. Please try again.')

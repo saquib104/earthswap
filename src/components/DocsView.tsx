@@ -55,7 +55,7 @@ export function DocsView() {
       <Section title="Overview">
         <Card>
           <p className="text-sm leading-relaxed" style={{ color: 'var(--subtle)' }}>
-            EarthSwap provides stablecoin-to-stablecoin FX execution and liquidity on Arc Mainnet. Users can swap between USDC, EURC, USYC, cirBTC, and WETH with transparent pricing, visible fees, and onchain settlement. All swaps are routed through Uniswap v3 liquidity pools deployed on Arc.
+            EarthSwap provides stablecoin-to-stablecoin FX execution and liquidity on Arc Mainnet. Users can swap between USDC, EURC, USYC, cirBTC, and WETH with transparent pricing, visible fees, and onchain settlement. All swaps are routed through Uniswap v4 liquidity pools deployed on Arc.
           </p>
           <div className="mt-4 space-y-2">
             {[
@@ -88,8 +88,8 @@ export function DocsView() {
                  │  ERC-20 approve + swap tx
                  ▼
         ┌─────────────────┐
-        │  Uniswap v3     │  ← SwapRouter02
-        │  SwapRouter02   │     0x53BF6B...
+        │  Uniswap v4     │  ← Universal Router
+        │  Universal Router   │     0x53BF6B...
         └────────┬────────┘
                  │
           ┌──────┴──────┐
@@ -143,11 +143,11 @@ export function DocsView() {
       <Section title="Swap Mechanism">
         <Card>
           <div className="space-y-3 text-sm" style={{ color: 'var(--subtle)' }}>
-            <p>EarthSwap routes every swap through Uniswap v3's <code className="mono text-xs px-1 py-0.5 rounded" style={{ background: 'var(--surface-muted)' }}>exactInputSingle</code> on Arc mainnet. The process:</p>
+            <p>EarthSwap routes every swap through Uniswap v4's <code className="mono text-xs px-1 py-0.5 rounded" style={{ background: 'var(--surface-muted)' }}>quoteExactInputSingle</code> on Arc mainnet. The process:</p>
             <ol className="list-decimal ml-5 space-y-1.5">
-              <li>User inputs an amount. EarthSwap queries QuoterV2 across all 4 fee tiers (0.01%, 0.05%, 0.30%, 1.00%) and selects the best output.</li>
+              <li>User inputs an amount. EarthSwap queries V4 Quoter across all 4 fee tiers (0.01%, 0.05%, 0.30%, 1.00%) and selects the best output.</li>
               <li>The quote shows exchange rate, fee, price impact, and minimum received (after slippage).</li>
-              <li>If this is the user's first swap of that token, they approve the SwapRouter02 contract for the input amount.</li>
+              <li>If this is the user's first swap of that token, they approve the Universal Router contract for the input amount.</li>
               <li>The swap transaction is submitted. The router moves tokens from the user's wallet, executes against the pool, and delivers output tokens directly to the user's address.</li>
               <li>Settlement occurs in ~1 second on Arc. An onchain receipt with explorer link is shown.</li>
             </ol>
@@ -159,7 +159,7 @@ export function DocsView() {
       <Section title="Liquidity Pools">
         <Card>
           <p className="text-sm mb-4" style={{ color: 'var(--subtle)' }}>
-            EarthSwap uses Uniswap v3 concentrated liquidity pools. Liquidity providers earn fees on every swap through their range.
+            EarthSwap uses Uniswap v4 concentrated liquidity pools. Liquidity providers earn fees on every swap through their range.
           </p>
           <div className="space-y-2">
             {RECOMMENDED_PAIRS.map(({ tokenA, tokenB, fee }) => (
@@ -207,7 +207,7 @@ export function DocsView() {
       <Section title="Smart Contracts">
         <Card>
           <div className="space-y-2">
-            <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--subtle)' }}>Uniswap v3 on Arc Mainnet</div>
+            <div className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: 'var(--subtle)' }}>Uniswap v4 on Arc Mainnet</div>
             {Object.entries(UNISWAP_ADDRESSES).map(([name, addr]) => (
               <div key={name} className="flex items-center justify-between rounded-lg px-3 py-2.5" style={{ background: 'var(--surface-muted)' }}>
                 <span className="text-xs font-medium capitalize" style={{ color: 'var(--muted)' }}>{name}</span>
@@ -274,7 +274,7 @@ export function DocsView() {
                 { title: 'USDC-native gas', detail: 'Users pay transaction fees in USDC — the same token they are swapping. No ETH or other gas tokens required.' },
                 { title: 'Sub-second finality', detail: 'Swaps settle in ~1 second. This is important for FX applications where rate validity windows are short.' },
                 { title: 'Predictable fees', detail: 'Arc uses stable gas pricing, making the total cost of a swap predictable before signing.' },
-                { title: 'Uniswap v3 deployed', detail: 'All four Uniswap v3 contracts (factory, SwapRouter02, QuoterV2, NFT Position Manager) are live on Arc mainnet.' },
+                { title: 'Uniswap v4 deployed', detail: 'All four Uniswap v4 contracts (factory, Universal Router, QuoterV2, NFT Position Manager) are live on Arc mainnet.' },
               ].map(({ title, detail }) => (
                 <div key={title} className="rounded-xl p-3" style={{ background: 'var(--surface-muted)' }}>
                   <div className="font-semibold text-sm mb-1" style={{ color: 'var(--ink)' }}>{title}</div>

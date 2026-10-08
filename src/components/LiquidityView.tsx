@@ -502,7 +502,7 @@ export function LiquidityView() {
           </h2>
         </div>
         <p className="text-sm" style={{ color: 'var(--muted)' }}>
-          Provide liquidity to Uniswap v3 pools on Arc mainnet and earn swap fees.
+          Provide liquidity to Uniswap v4 pools on Arc mainnet and earn swap fees.
         </p>
       </div>
 
@@ -511,7 +511,7 @@ export function LiquidityView() {
         style={{ background: 'rgba(172,198,233,0.08)', border: '1px solid rgba(172,198,233,0.15)' }}>
         <Info className="mt-0.5 size-3.5 shrink-0" style={{ color: 'var(--accent)' }} />
         <p style={{ color: 'var(--muted)' }}>
-          Positions are created as full-range Uniswap v3 NFTs. You earn fees proportional to your pool share on every swap through EarthSwap and Uniswap. Full-range positions are always active but may earn less than concentrated positions.
+          Positions are created as full-range Uniswap v4 NFTs. You earn fees proportional to your pool share on every swap through EarthSwap and Uniswap. Full-range positions are always active but may earn less than concentrated positions.
         </p>
       </div>
 

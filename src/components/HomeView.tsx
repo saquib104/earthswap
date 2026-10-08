@@ -438,7 +438,7 @@ export function HomeView({ onNavigate }: HomeViewProps) {
             { name: 'Arc', detail: 'Settlement layer' },
             { name: 'USDC', detail: 'Stablecoin liquidity' },
             { name: 'EURC', detail: 'Euro liquidity' },
-            { name: 'Uniswap v3', detail: 'AMM infrastructure' },
+            { name: 'Uniswap v4', detail: 'AMM infrastructure' },
           ].map(({ name, detail }) => (
             <div
               key={name}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSwitchChain } from 'wagmi'
-import { erc20Abi, parseUnits, formatUnits, createPublicClient, http } from 'viem'
+import { erc20Abi, parseUnits, formatUnits, createPublicClient, http, encodeAbiParameters, encodePacked } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowDownUp, Settings, Loader2, ExternalLink, AlertTriangle,
@@ -17,17 +17,19 @@ import {
 // EarthSwapRouter — deployed on Arc mainnet, earns 0.15% protocol fee
 const EARTHSWAP_ROUTER = '0x23ACd156ea1A85C40631b6314fEFa9C9D369f427' as const
 
+// SwapParams struct order MUST match EarthSwapRouter.sol exactly:
+// tokenIn, tokenOut, fee, amountIn, amountOutMinimum, sqrtPriceLimitX96, deadline, recipient
 const EARTHSWAP_ROUTER_ABI = [
   {
     inputs: [{ components: [
       { name: 'tokenIn',           type: 'address' },
       { name: 'tokenOut',          type: 'address' },
       { name: 'fee',               type: 'uint24'  },
-      { name: 'recipient',         type: 'address' },
-      { name: 'deadline',          type: 'uint256' },
       { name: 'amountIn',          type: 'uint256' },
       { name: 'amountOutMinimum',  type: 'uint256' },
       { name: 'sqrtPriceLimitX96', type: 'uint160' },
+      { name: 'deadline',          type: 'uint256' },
+      { name: 'recipient',         type: 'address' },
     ], name: 'params', type: 'tuple' }],
     name: 'swapExactInputSingle',
     outputs: [{ name: 'amountOut', type: 'uint256' }],
@@ -39,26 +41,61 @@ const EARTHSWAP_ROUTER_ABI = [
 import { useTokenBalance } from '@/hooks/useTokenBalance'
 import { buildTxExplorerUrl, requireChain } from '@/onchain-facts'
 
-const QUOTER_V2_ABI = [
+// Uniswap v4 Quoter ABI — quoteExactInputSingle with PoolKey struct
+// PoolKey = (currency0 address, currency1 address, fee uint24, tickSpacing int24, hooks address)
+// currencies MUST be sorted: lower address = currency0
+const V4_QUOTER_ABI = [
   {
-    inputs: [{ components: [
-      { name: 'tokenIn', type: 'address' },
-      { name: 'tokenOut', type: 'address' },
-      { name: 'amountIn', type: 'uint256' },
-      { name: 'fee', type: 'uint24' },
-      { name: 'sqrtPriceLimitX96', type: 'uint160' },
-    ], name: 'params', type: 'tuple' }],
+    inputs: [{
+      components: [
+        { components: [
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee',       type: 'uint24'  },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks',     type: 'address' },
+        ], name: 'poolKey', type: 'tuple' },
+        { name: 'zeroForOne',   type: 'bool'    },
+        { name: 'exactAmount',  type: 'uint128' },
+        { name: 'hookData',     type: 'bytes'   },
+      ],
+      name: 'params', type: 'tuple',
+    }],
     name: 'quoteExactInputSingle',
     outputs: [
-      { name: 'amountOut', type: 'uint256' },
-      { name: 'sqrtPriceX96After', type: 'uint160' },
-      { name: 'initializedTicksCrossed', type: 'uint32' },
-      { name: 'gasEstimate', type: 'uint256' },
+      { name: 'amountOut',    type: 'uint256' },
+      { name: 'gasEstimate',  type: 'uint256' },
     ],
     stateMutability: 'nonpayable',
     type: 'function',
   },
 ] as const
+
+// Uniswap v4 Universal Router ABI — execute(bytes commands, bytes[] inputs, uint256 deadline)
+const UNIVERSAL_ROUTER_ABI = [
+  {
+    inputs: [
+      { name: 'commands', type: 'bytes'   },
+      { name: 'inputs',   type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    name: 'execute',
+    outputs: [],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+] as const
+
+// V4_SWAP command byte for Universal Router
+const V4_SWAP_COMMAND = '0x10' as const
+
+// Fee tiers → tick spacing mapping for Uniswap v4 on Arc
+const FEE_TO_TICK_SPACING: Record<number, number> = {
+  100:   1,
+  500:   10,
+  3000:  60,
+  10000: 200,
+}
 
 
 const DEFAULT_SLIPPAGE = 50
@@ -198,7 +235,7 @@ export function SwapCard() {
     address: tokenIn.address as `0x${string}`,
     abi: erc20Abi,
     functionName: 'allowance',
-    args: address ? [address, EARTHSWAP_ROUTER] : undefined,
+    args: address ? [address, UNISWAP_ADDRESSES.universalRouter as `0x${string}`] : undefined,
     chainId: ARC_CHAIN_ID,
     query: { enabled: !!address && parsedAmountIn > 0n },
   })
@@ -248,35 +285,63 @@ export function SwapCard() {
     }
   }, [isSwapError, swapError])
 
-  // Quote fetcher
+  // Quote fetcher — Uniswap v4 QuoterV2
   const fetchQuote = useCallback(async () => {
     if (!parsedAmountIn || parsedAmountIn === 0n) {
       setQuote(null); setQuoteError(null); return
     }
     setIsQuoting(true); setQuoteError(null)
     try {
+      const ARC_RPC = 'https://rpc.mainnet.arc.io'
       const arcChain = requireChain(ARC_CHAIN_ID)
-      const client = createPublicClient({ chain: { ...arcChain, id: ARC_CHAIN_ID, name: 'Arc', nativeCurrency: { name: arcChain.nativeCurrency.symbol, symbol: arcChain.nativeCurrency.symbol, decimals: arcChain.nativeCurrency.decimals }, rpcUrls: { default: { http: [arcChain.rpcUrls[0]] } } }, transport: http(arcChain.rpcUrls[0]) })
+      const client = createPublicClient({
+        chain: {
+          ...arcChain,
+          id: ARC_CHAIN_ID,
+          name: 'Arc',
+          nativeCurrency: { name: arcChain.nativeCurrency.symbol, symbol: arcChain.nativeCurrency.symbol, decimals: arcChain.nativeCurrency.decimals },
+          rpcUrls: { default: { http: [ARC_RPC] } },
+        },
+        transport: http(ARC_RPC),
+      })
+
+      // Uniswap v4: sort currencies (lower address = currency0)
+      const addrIn  = tokenIn.address.toLowerCase()
+      const addrOut = tokenOut.address.toLowerCase()
+      const zeroForOne = addrIn < addrOut
+      const currency0 = (zeroForOne ? tokenIn.address : tokenOut.address) as `0x${string}`
+      const currency1 = (zeroForOne ? tokenOut.address : tokenIn.address) as `0x${string}`
+      // Clamp to uint128 max
+      const exactAmount = parsedAmountIn > BigInt('0xffffffffffffffffffffffffffffffff')
+        ? BigInt('0xffffffffffffffffffffffffffffffff')
+        : parsedAmountIn
+
       let best: QuoteResult | null = null
       for (const fee of AUTO_ROUTE_FEE_TIERS) {
+        const tickSpacing = FEE_TO_TICK_SPACING[fee] ?? 60
         try {
           const result = await client.simulateContract({
-            address: UNISWAP_ADDRESSES.quoterV2,
-            abi: QUOTER_V2_ABI,
+            address: UNISWAP_ADDRESSES.quoterV4,
+            abi: V4_QUOTER_ABI,
             functionName: 'quoteExactInputSingle',
-            args: [{ tokenIn: tokenIn.address as `0x${string}`, tokenOut: tokenOut.address as `0x${string}`, amountIn: parsedAmountIn, fee, sqrtPriceLimitX96: 0n }],
+            args: [{
+              poolKey: { currency0, currency1, fee, tickSpacing, hooks: '0x0000000000000000000000000000000000000000' },
+              zeroForOne,
+              exactAmount,
+              hookData: '0x',
+            }],
           })
-          const [amountOut, sqrtPriceX96After, , gasEstimate] = result.result
-          if (!best || amountOut > best.amountOut) {
-            best = { amountOut, fee, gasEstimate, sqrtPriceX96After }
+          const [amountOut] = result.result as [bigint, bigint]
+          if (amountOut > 0n && (!best || amountOut > best.amountOut)) {
+            best = { amountOut, fee, gasEstimate: 0n, sqrtPriceX96After: 0n }
           }
-        } catch { /* no pool at this tier */ }
+        } catch { /* no v4 pool at this tier */ }
       }
       if (best) {
         setQuote(best)
         setQuoteKey(k => k + 1)
       } else {
-        setQuoteError('No liquidity found for this pair.')
+        setQuoteError('No liquidity found for this pair on Uniswap v4.')
         setQuote(null)
       }
     } catch {
@@ -297,23 +362,69 @@ export function SwapCard() {
     if (!address || !quote) return
     const amountOutMin = quote.amountOut * BigInt(10000 - slippage) / 10000n
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 300) // 5 min
+
+    // Uniswap v4 Universal Router swap
+    // Sort currencies for PoolKey
+    const addrIn  = tokenIn.address.toLowerCase()
+    const addrOut = tokenOut.address.toLowerCase()
+    const zeroForOne = addrIn < addrOut
+    const currency0 = (zeroForOne ? tokenIn.address : tokenOut.address) as `0x${string}`
+    const currency1 = (zeroForOne ? tokenOut.address : tokenIn.address) as `0x${string}`
+    const tickSpacing = FEE_TO_TICK_SPACING[quote.fee] ?? 60
+    const hookData = '0x' as `0x${string}`
+
+    // Encode V4_SWAP action params using ABI encoding
+    // Actions: SWAP_EXACT_IN_SINGLE (0x06) + SETTLE_ALL (0x10) + TAKE_ALL (0x11)
+    // We use encodeAbiParameters for each action
+    // V4 Router actions
+    const SWAP_EXACT_IN_SINGLE = 0x06
+    const SETTLE_ALL           = 0x10
+    const TAKE_ALL             = 0x11
+
+    const actions = encodePacked(['uint8', 'uint8', 'uint8'], [SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL])
+
+    // Param 0: SwapExactInSingleParams
+    const swapParam = encodeAbiParameters(
+      [{ type: 'tuple', components: [
+        { type: 'tuple', name: 'poolKey', components: [
+          { type: 'address', name: 'currency0' },
+          { type: 'address', name: 'currency1' },
+          { type: 'uint24',  name: 'fee'       },
+          { type: 'int24',   name: 'tickSpacing'},
+          { type: 'address', name: 'hooks'     },
+        ]},
+        { type: 'bool',    name: 'zeroForOne'       },
+        { type: 'uint128', name: 'amountIn'          },
+        { type: 'uint128', name: 'amountOutMinimum'  },
+        { type: 'bytes',   name: 'hookData'          },
+      ]},
+      ],
+      [{
+        poolKey: { currency0, currency1, fee: quote.fee, tickSpacing, hooks: '0x0000000000000000000000000000000000000000' },
+        zeroForOne,
+        amountIn: parsedAmountIn > BigInt('0xffffffffffffffffffffffffffffffff') ? BigInt('0xffffffffffffffffffffffffffffffff') : parsedAmountIn,
+        amountOutMinimum: amountOutMin > BigInt('0xffffffffffffffffffffffffffffffff') ? BigInt('0xffffffffffffffffffffffffffffffff') : amountOutMin,
+        hookData,
+      }]
+    )
+    // Param 1: SETTLE_ALL (currency, maxAmount)
+    const settleParam = encodeAbiParameters(
+      [{ type: 'address' }, { type: 'uint256' }],
+      [tokenIn.address as `0x${string}`, parsedAmountIn]
+    )
+    // Param 2: TAKE_ALL (currency, minAmount)
+    const takeParam = encodeAbiParameters(
+      [{ type: 'address' }, { type: 'uint256' }],
+      [tokenOut.address as `0x${string}`, amountOutMin]
+    )
+
     swap({
-      address: EARTHSWAP_ROUTER,
-      abi: EARTHSWAP_ROUTER_ABI,
-      functionName: 'swapExactInputSingle',
-      args: [{
-        tokenIn: tokenIn.address as `0x${string}`,
-        tokenOut: tokenOut.address as `0x${string}`,
-        fee: quote.fee,
-        recipient: address,
-        deadline,
-        amountIn: parsedAmountIn,
-        amountOutMinimum: amountOutMin,
-        sqrtPriceLimitX96: 0n,
-      }],
+      address: UNISWAP_ADDRESSES.universalRouter,
+      abi: UNIVERSAL_ROUTER_ABI,
+      functionName: 'execute',
+      args: [actions, [swapParam, settleParam, takeParam], deadline],
       chainId: ARC_CHAIN_ID,
-      gas: 350000n,
-      maxFeePerGas: 25000000000n,
+      gas: 500000n,
     })
   }
 
@@ -345,7 +456,8 @@ export function SwapCard() {
     if (!isConnected) return
     if (isWrongChain) { switchChain({ chainId: ARC_CHAIN_ID }); return }
     if (needsApproval) {
-      approve({ address: tokenIn.address as `0x${string}`, abi: erc20Abi, functionName: 'approve', args: [EARTHSWAP_ROUTER, parsedAmountIn], chainId: ARC_CHAIN_ID })
+      // Approve Universal Router (v4 swap router) — Permit2 handles the actual allowance
+      approve({ address: tokenIn.address as `0x${string}`, abi: erc20Abi, functionName: 'approve', args: [UNISWAP_ADDRESSES.universalRouter as `0x${string}`, parsedAmountIn], chainId: ARC_CHAIN_ID })
       return
     }
     handleSwap()
@@ -536,7 +648,7 @@ export function SwapCard() {
                   />
                   <DetailRow
                     label="Route"
-                    value={`EarthSwap ${tokenIn.symbol}/${tokenOut.symbol}`}
+                    value={`EarthSwap ${tokenIn.symbol}/${tokenOut.symbol} · Uniswap v4`}
                   />
                   <DetailRow
                     label="Settlement"

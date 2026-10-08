@@ -150,7 +150,7 @@ export function TokenSelector({ open, selected, exclude, onSelect, onClose }: To
             className="px-5 py-3 text-xs border-t"
             style={{ color: 'var(--subtle)', borderColor: 'var(--border)' }}
           >
-            All tokens are on Arc mainnet. Swap routes use Uniswap v3.
+            All tokens are on Arc mainnet. Swap routes use Uniswap v4.
           </div>
         </motion.div>
       </motion.div>

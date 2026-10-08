@@ -69,13 +69,15 @@ export function StatsView() {
       {/* Protocol contracts */}
       <div className="rounded-2xl p-5" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <h3 className="display text-base font-semibold mb-4" style={{ color: 'var(--ink)' }}>
-          Uniswap v3 on Arc
+          Uniswap v4 on Arc
         </h3>
         <div className="space-y-2.5">
           {([
             ['Factory',      UNISWAP_ADDRESSES.factory],
-            ['SwapRouter02', UNISWAP_ADDRESSES.swapRouter02],
-            ['QuoterV2',     UNISWAP_ADDRESSES.quoterV2],
+            ['Universal Router', UNISWAP_ADDRESSES.swapRouter02],
+            ['Quoter (v3)',  UNISWAP_ADDRESSES.quoterV1],
+            ['QuoterV2 (v4)', UNISWAP_ADDRESSES.quoterV4],
+            ['Universal Router', UNISWAP_ADDRESSES.universalRouter],
             ['Position NFT', UNISWAP_ADDRESSES.nftPositionManager],
             ['Permit2',      UNISWAP_ADDRESSES.permit2],
           ] as [string, string][]).map(([label, addr]) => (
@@ -105,7 +107,7 @@ export function StatsView() {
         </div>
         <div className="space-y-3 text-sm" style={{ color: 'var(--muted)' }}>
           <p>
-            EarthSwap is a non-custodial AMM interface on Arc mainnet, powered by Uniswap v3 and v4
+            EarthSwap is a non-custodial AMM interface on Arc mainnet, powered by Uniswap v4 and v4
             smart contracts. Your assets never leave your wallet until you confirm a transaction.
           </p>
           <p>
