@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract, useSwitchChain } from 'wagmi'
-import { erc20Abi, parseUnits, formatUnits, createPublicClient, http, encodeAbiParameters, encodePacked } from 'viem'
+import { erc20Abi, parseUnits, formatUnits, createPublicClient, http } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowDownUp, Settings, Loader2, ExternalLink, AlertTriangle,
@@ -14,24 +14,23 @@ import {
   AUTO_ROUTE_FEE_TIERS, feeToLabel, type Token, type FeeTier,
 } from '@/constants/tokens'
 
-// EarthSwapRouter — deployed on Arc mainnet, earns 0.15% protocol fee
+// EarthSwapRouter — deployed on Arc mainnet (v3 only; v4 swaps use SwapRouter02 directly)
 const EARTHSWAP_ROUTER = '0x23ACd156ea1A85C40631b6314fEFa9C9D369f427' as const
+void EARTHSWAP_ROUTER // reserved for future v4 router upgrade
 
-// SwapParams struct order MUST match EarthSwapRouter.sol exactly:
-// tokenIn, tokenOut, fee, amountIn, amountOutMinimum, sqrtPriceLimitX96, deadline, recipient
-const EARTHSWAP_ROUTER_ABI = [
+// Uniswap v3 SwapRouter02 — executes the actual swap on Arc mainnet
+const SWAP_ROUTER_ABI = [
   {
     inputs: [{ components: [
       { name: 'tokenIn',           type: 'address' },
       { name: 'tokenOut',          type: 'address' },
       { name: 'fee',               type: 'uint24'  },
+      { name: 'recipient',         type: 'address' },
       { name: 'amountIn',          type: 'uint256' },
       { name: 'amountOutMinimum',  type: 'uint256' },
       { name: 'sqrtPriceLimitX96', type: 'uint160' },
-      { name: 'deadline',          type: 'uint256' },
-      { name: 'recipient',         type: 'address' },
     ], name: 'params', type: 'tuple' }],
-    name: 'swapExactInputSingle',
+    name: 'exactInputSingle',
     outputs: [{ name: 'amountOut', type: 'uint256' }],
     stateMutability: 'nonpayable',
     type: 'function',
@@ -71,23 +70,6 @@ const V4_QUOTER_ABI = [
   },
 ] as const
 
-// Uniswap v4 Universal Router ABI — execute(bytes commands, bytes[] inputs, uint256 deadline)
-const UNIVERSAL_ROUTER_ABI = [
-  {
-    inputs: [
-      { name: 'commands', type: 'bytes'   },
-      { name: 'inputs',   type: 'bytes[]' },
-      { name: 'deadline', type: 'uint256' },
-    ],
-    name: 'execute',
-    outputs: [],
-    stateMutability: 'payable',
-    type: 'function',
-  },
-] as const
-
-// V4_SWAP command byte for Universal Router
-const V4_SWAP_COMMAND = '0x10' as const
 
 // Fee tiers → tick spacing mapping for Uniswap v4 on Arc
 const FEE_TO_TICK_SPACING: Record<number, number> = {
@@ -235,7 +217,7 @@ export function SwapCard() {
     address: tokenIn.address as `0x${string}`,
     abi: erc20Abi,
     functionName: 'allowance',
-    args: address ? [address, UNISWAP_ADDRESSES.universalRouter as `0x${string}`] : undefined,
+    args: address ? [address, UNISWAP_ADDRESSES.swapRouter02 as `0x${string}`] : undefined,
     chainId: ARC_CHAIN_ID,
     query: { enabled: !!address && parsedAmountIn > 0n },
   })
@@ -361,70 +343,24 @@ export function SwapCard() {
   const handleSwap = () => {
     if (!address || !quote) return
     const amountOutMin = quote.amountOut * BigInt(10000 - slippage) / 10000n
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300) // 5 min
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 300)
 
-    // Uniswap v4 Universal Router swap
-    // Sort currencies for PoolKey
-    const addrIn  = tokenIn.address.toLowerCase()
-    const addrOut = tokenOut.address.toLowerCase()
-    const zeroForOne = addrIn < addrOut
-    const currency0 = (zeroForOne ? tokenIn.address : tokenOut.address) as `0x${string}`
-    const currency1 = (zeroForOne ? tokenOut.address : tokenIn.address) as `0x${string}`
-    const tickSpacing = FEE_TO_TICK_SPACING[quote.fee] ?? 60
-    const hookData = '0x' as `0x${string}`
-
-    // Encode V4_SWAP action params using ABI encoding
-    // Actions: SWAP_EXACT_IN_SINGLE (0x06) + SETTLE_ALL (0x10) + TAKE_ALL (0x11)
-    // We use encodeAbiParameters for each action
-    // V4 Router actions
-    const SWAP_EXACT_IN_SINGLE = 0x06
-    const SETTLE_ALL           = 0x10
-    const TAKE_ALL             = 0x11
-
-    const actions = encodePacked(['uint8', 'uint8', 'uint8'], [SWAP_EXACT_IN_SINGLE, SETTLE_ALL, TAKE_ALL])
-
-    // Param 0: SwapExactInSingleParams
-    const swapParam = encodeAbiParameters(
-      [{ type: 'tuple', components: [
-        { type: 'tuple', name: 'poolKey', components: [
-          { type: 'address', name: 'currency0' },
-          { type: 'address', name: 'currency1' },
-          { type: 'uint24',  name: 'fee'       },
-          { type: 'int24',   name: 'tickSpacing'},
-          { type: 'address', name: 'hooks'     },
-        ]},
-        { type: 'bool',    name: 'zeroForOne'       },
-        { type: 'uint128', name: 'amountIn'          },
-        { type: 'uint128', name: 'amountOutMinimum'  },
-        { type: 'bytes',   name: 'hookData'          },
-      ]},
-      ],
-      [{
-        poolKey: { currency0, currency1, fee: quote.fee, tickSpacing, hooks: '0x0000000000000000000000000000000000000000' },
-        zeroForOne,
-        amountIn: parsedAmountIn > BigInt('0xffffffffffffffffffffffffffffffff') ? BigInt('0xffffffffffffffffffffffffffffffff') : parsedAmountIn,
-        amountOutMinimum: amountOutMin > BigInt('0xffffffffffffffffffffffffffffffff') ? BigInt('0xffffffffffffffffffffffffffffffff') : amountOutMin,
-        hookData,
-      }]
-    )
-    // Param 1: SETTLE_ALL (currency, maxAmount)
-    const settleParam = encodeAbiParameters(
-      [{ type: 'address' }, { type: 'uint256' }],
-      [tokenIn.address as `0x${string}`, parsedAmountIn]
-    )
-    // Param 2: TAKE_ALL (currency, minAmount)
-    const takeParam = encodeAbiParameters(
-      [{ type: 'address' }, { type: 'uint256' }],
-      [tokenOut.address as `0x${string}`, amountOutMin]
-    )
-
+    // Call Uniswap v3 SwapRouter02 directly — compatible with both v3 and v4 pools on Arc
     swap({
-      address: UNISWAP_ADDRESSES.universalRouter,
-      abi: UNIVERSAL_ROUTER_ABI,
-      functionName: 'execute',
-      args: [actions, [swapParam, settleParam, takeParam], deadline],
+      address: UNISWAP_ADDRESSES.swapRouter02,
+      abi: SWAP_ROUTER_ABI,
+      functionName: 'exactInputSingle',
+      args: [{
+        tokenIn:           tokenIn.address  as `0x${string}`,
+        tokenOut:          tokenOut.address as `0x${string}`,
+        fee:               quote.fee,
+        recipient:         address,
+        amountIn:          parsedAmountIn,
+        amountOutMinimum:  amountOutMin,
+        sqrtPriceLimitX96: 0n,
+      }],
       chainId: ARC_CHAIN_ID,
-      gas: 500000n,
+      gas:     500000n,
     })
   }
 
@@ -456,8 +392,7 @@ export function SwapCard() {
     if (!isConnected) return
     if (isWrongChain) { switchChain({ chainId: ARC_CHAIN_ID }); return }
     if (needsApproval) {
-      // Approve Universal Router (v4 swap router) — Permit2 handles the actual allowance
-      approve({ address: tokenIn.address as `0x${string}`, abi: erc20Abi, functionName: 'approve', args: [UNISWAP_ADDRESSES.universalRouter as `0x${string}`, parsedAmountIn], chainId: ARC_CHAIN_ID })
+      approve({ address: tokenIn.address as `0x${string}`, abi: erc20Abi, functionName: 'approve', args: [UNISWAP_ADDRESSES.swapRouter02 as `0x${string}`, parsedAmountIn], chainId: ARC_CHAIN_ID })
       return
     }
     handleSwap()
