@@ -10,8 +10,10 @@ import { ActivityView } from './components/ActivityView'
 import { StatsView } from './components/StatsView'
 import { DocsView } from './components/DocsView'
 import { BridgeView } from './components/BridgeView'
+import { LiquidityView } from './components/LiquidityView'
+import { OnrampView } from './components/OnrampView'
 
-type Tab = 'home' | 'trade' | 'bridge' | 'markets' | 'pools' | 'activity' | 'analytics' | 'docs'
+type Tab = 'home' | 'trade' | 'bridge' | 'liquidity' | 'onramp' | 'markets' | 'pools' | 'activity' | 'analytics' | 'docs'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('home')
@@ -30,7 +32,9 @@ export default function App() {
         {activeTab !== 'home' && (
           <div className="mx-auto max-w-4xl px-4 py-8 pb-36 lg:pb-8">
             {activeTab === 'trade'    && <SwapCard />}
-            {activeTab === 'bridge'   && <BridgeView />}
+            {activeTab === 'bridge'    && <BridgeView />}
+            {activeTab === 'liquidity' && <LiquidityView />}
+            {activeTab === 'onramp'    && <OnrampView />}
             {activeTab === 'markets'  && <MarketsView />}
             {activeTab === 'pools'    && <PoolsView />}
             {activeTab === 'activity' && <ActivityView />}

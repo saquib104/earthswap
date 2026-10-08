@@ -8,7 +8,7 @@ import { ARC_TOKENS, ARC_CHAIN_ID, UNISWAP_ADDRESSES, RECOMMENDED_PAIRS, type To
 import { GlobeHero } from './GlobeHero'
 import { TokenIcon } from './TokenIcon'
 
-type Tab = 'home' | 'trade' | 'bridge' | 'markets' | 'pools' | 'activity' | 'analytics' | 'docs'
+type Tab = 'home' | 'trade' | 'bridge' | 'liquidity' | 'onramp' | 'markets' | 'pools' | 'activity' | 'analytics' | 'docs'
 
 // Pool v3 ABI (slot0 + liquidity)
 const POOL_ABI = [
@@ -283,10 +283,11 @@ export function HomeView({ onNavigate }: HomeViewProps) {
               border: '1px solid rgba(52,211,153,0.18)',
             }}
           >
-            Swap and provide liquidity across stablecoins with&nbsp;
-            <span style={{ color: '#6ee7b7', fontWeight: 600 }}>transparent pricing</span>
-            &nbsp;and&nbsp;
-            <span style={{ color: '#6ee7b7', fontWeight: 600 }}>onchain settlement.</span>
+            Swap, bridge, and provide liquidity across stablecoins — with&nbsp;
+            <span style={{ color: '#6ee7b7', fontWeight: 600 }}>transparent pricing</span>,&nbsp;
+            <span style={{ color: '#6ee7b7', fontWeight: 600 }}>Circle onramp</span>,
+            &nbsp;and instant&nbsp;
+            <span style={{ color: '#6ee7b7', fontWeight: 600 }}>Arc onchain settlement.</span>
           </p>
 
           {/* CTAs */}

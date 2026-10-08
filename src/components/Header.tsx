@@ -1,9 +1,9 @@
 import { ConnectKitButton } from 'connectkit'
-import { Zap, Droplets, Activity, TrendingUp, BookOpen, Home, Menu, X, ArrowLeftRight, BarChart2 } from 'lucide-react'
+import { Zap, Droplets, Activity, TrendingUp, BookOpen, Home, Menu, X, ArrowLeftRight, CreditCard, PlusCircle } from 'lucide-react'
 import { useState } from 'react'
 import { EarthSwapLogo, EarthSwapWordmark } from './Logo'
 
-type Tab = 'home' | 'trade' | 'bridge' | 'markets' | 'pools' | 'activity' | 'analytics' | 'docs'
+type Tab = 'home' | 'trade' | 'bridge' | 'liquidity' | 'onramp' | 'markets' | 'pools' | 'activity' | 'analytics' | 'docs'
 
 interface HeaderProps {
   activeTab: Tab
@@ -11,19 +11,20 @@ interface HeaderProps {
 }
 
 const NAV_ITEMS: { tab: Tab; icon: React.ReactNode; label: string }[] = [
-  { tab: 'home',      icon: <Home className="size-4.5" strokeWidth={2.2} />,          label: 'Home'     },
-  { tab: 'trade',     icon: <Zap className="size-4.5" strokeWidth={2.2} />,           label: 'Trade'    },
-  { tab: 'bridge',    icon: <ArrowLeftRight className="size-4.5" strokeWidth={2.2} />,label: 'Bridge'   },
-  { tab: 'markets',   icon: <TrendingUp className="size-4.5" strokeWidth={2.2} />,    label: 'Markets'  },
-  { tab: 'pools',     icon: <Droplets className="size-4.5" strokeWidth={2.2} />,      label: 'Pools'    },
-  { tab: 'activity',  icon: <Activity className="size-4.5" strokeWidth={2.2} />,      label: 'Activity' },
-  { tab: 'analytics', icon: <BarChart2 className="size-4.5" strokeWidth={2.2} />,     label: 'Analytics'},
-  { tab: 'docs',      icon: <BookOpen className="size-4.5" strokeWidth={2.2} />,      label: 'Docs'     },
+  { tab: 'home',      icon: <Home className="size-4.5" strokeWidth={2.2} />,          label: 'Home'      },
+  { tab: 'trade',     icon: <Zap className="size-4.5" strokeWidth={2.2} />,           label: 'Trade'     },
+  { tab: 'bridge',    icon: <ArrowLeftRight className="size-4.5" strokeWidth={2.2} />,label: 'Bridge'    },
+  { tab: 'liquidity', icon: <PlusCircle className="size-4.5" strokeWidth={2.2} />,    label: 'Liquidity' },
+  { tab: 'onramp',    icon: <CreditCard className="size-4.5" strokeWidth={2.2} />,    label: 'Buy USDC'  },
+  { tab: 'markets',   icon: <TrendingUp className="size-4.5" strokeWidth={2.2} />,    label: 'Markets'   },
+  { tab: 'pools',     icon: <Droplets className="size-4.5" strokeWidth={2.2} />,      label: 'Pools'     },
+  { tab: 'activity',  icon: <Activity className="size-4.5" strokeWidth={2.2} />,      label: 'Activity'  },
+  { tab: 'docs',      icon: <BookOpen className="size-4.5" strokeWidth={2.2} />,      label: 'Docs'      },
 ]
 
-// All 8 tabs for mobile — split into two rows of 4
-const MOBILE_ROW1 = NAV_ITEMS.slice(0, 4)
-const MOBILE_ROW2 = NAV_ITEMS.slice(4)
+// Mobile: split into rows of 5
+const MOBILE_ROW1 = NAV_ITEMS.slice(0, 5)
+const MOBILE_ROW2 = NAV_ITEMS.slice(5)
 
 export function Header({ activeTab, onTabChange }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
