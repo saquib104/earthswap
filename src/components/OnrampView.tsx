@@ -54,12 +54,14 @@ export function OnrampView() {
 
   const handleLaunch = () => {
     if (!isValidAmount || !isValidAddress) return
-    // Build Circle onramp URL with pre-fill
+    // Build Circle onramp URL — payment method is a preference hint;
+    // final available methods depend on Circle's checkout and your jurisdiction.
     const params = new URLSearchParams({
       destinationAddress: recipient,
       destinationChain: 'ARC',
       amount: amount,
       currency: 'USD',
+      paymentMethod: method,   // passed as a preference hint to Circle's checkout
     })
     window.open(`https://onramp.circle.com?${params.toString()}`, '_blank', 'width=480,height=700')
     setLaunched(true)
@@ -137,14 +139,19 @@ export function OnrampView() {
             <p className="mt-1 text-xs" style={{ color: '#ef4444' }}>Enter an amount between $10 and $10,000</p>
           )}
           {isValidAmount && (
-            <div className="mt-2 flex items-center justify-between px-1">
-              <span className="text-xs" style={{ color: 'var(--subtle)' }}>You receive approx.</span>
-              <div className="flex items-center gap-1.5">
-                <TokenIcon symbol="USDC" size={16} />
-                <span className="mono text-sm font-semibold" style={{ color: 'var(--accent)' }}>
-                  ~{(numAmount * 0.98).toFixed(2)} USDC
-                </span>
+            <div className="mt-2 space-y-1 px-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs" style={{ color: 'var(--subtle)' }}>Indicative amount (after ~2% fees)</span>
+                <div className="flex items-center gap-1.5">
+                  <TokenIcon symbol="USDC" size={16} />
+                  <span className="mono text-sm font-semibold" style={{ color: 'var(--accent)' }}>
+                    ~{(numAmount * 0.98).toFixed(2)} USDC
+                  </span>
+                </div>
               </div>
+              <p className="text-[11px]" style={{ color: 'var(--subtle)', opacity: 0.7 }}>
+                Estimate only. Actual amount depends on Circle's fees, FX rates, and payment method at checkout.
+              </p>
             </div>
           )}
         </div>
@@ -173,6 +180,9 @@ export function OnrampView() {
               </button>
             ))}
           </div>
+          <p className="mt-2 text-[11px]" style={{ color: 'var(--subtle)', opacity: 0.7 }}>
+            Payment method availability depends on your jurisdiction and Circle's checkout. Your selection is passed as a preference — Circle's hosted checkout makes the final determination.
+          </p>
         </div>
 
         {/* Destination */}

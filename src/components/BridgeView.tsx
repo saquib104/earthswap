@@ -172,8 +172,6 @@ export function BridgeView() {
     if (!amount || isNaN(n) || n <= 0) return 'Enter a valid amount'
     if (n < 0.01)                       return 'Minimum bridge amount is 0.01 USDC'
     if (fromChain.id === toChain.id)    return 'Source and destination must differ'
-    if (fromChain.id === BridgeChain.Solana || toChain.id === BridgeChain.Solana)
-      return 'Solana bridging requires Phantom wallet — coming soon'
     if (recipient && !/^0x[0-9a-fA-F]{40}$/.test(recipient))
       return 'Invalid recipient address'
     return null
@@ -198,43 +196,23 @@ export function BridgeView() {
       const provider = (await connector.getProvider()) as EIP1193Provider
       const adapter  = await createViemAdapterFromProvider({ provider })
 
-      // Animate steps sequentially while bridge executes
-      const stepNames = ['approve', 'burn', 'fetchAttestation', 'mint']
-      let stepIdx = 0
-      updateStep(stepNames[0], { state: 'running' })
-      const stepTimer = setInterval(() => {
-        stepIdx++
-        if (stepIdx < stepNames.length) {
-          updateStep(stepNames[stepIdx - 1], { state: 'success' })
-          updateStep(stepNames[stepIdx], { state: 'running' })
-        } else {
-          clearInterval(stepTimer)
-        }
-      }, 4000)
+      // Mark first step running — the SDK handles the full approve→burn→attest→mint flow
+      // internally. We surface the final outcome per step once the SDK resolves.
+      updateStep('approve', { state: 'running' })
 
-      let result: { state?: string } | undefined
-      try {
-        result = await appKit.bridge({
-          from: { adapter, chain: fromChain.id },
-          to:   recipient
-                  ? { adapter, chain: toChain.id, address: recipient }
-                  : { adapter, chain: toChain.id },
-          amount: String(parseFloat(amount)),
-        })
-      } finally {
-        clearInterval(stepTimer)
-      }
+      // AppKit.bridge() resolves void on success, throws on failure.
+      // Per-step tx hashes are not exposed by the SDK — we reflect the overall outcome.
+      await appKit.bridge({
+        from: { adapter, chain: fromChain.id },
+        to:   recipient
+                ? { adapter, chain: toChain.id, address: recipient }
+                : { adapter, chain: toChain.id },
+        amount: String(parseFloat(amount)),
+      })
 
-      if (result?.state === 'success') {
-        // Mark all running/pending steps as success
-        setSteps(prev => prev.map(s =>
-          s.state === 'running' || s.state === 'pending' ? { ...s, state: 'success' } : s
-        ))
-        setDone(true)
-      } else {
-        setError(`Bridge ended with state: ${String(result?.state ?? 'unknown')}. Check steps above.`)
-        setSteps(prev => prev.map(s => s.state === 'running' ? { ...s, state: 'failed' } : s))
-      }
+      // Resolved without throwing — all CCTP steps completed successfully
+      setSteps(prev => prev.map(s => ({ ...s, state: 'success' as StepState })))
+      setDone(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Bridge failed. Please try again.')
       setSteps(prev => prev.map(s => s.state === 'running' ? { ...s, state: 'failed' } : s))
@@ -435,7 +413,12 @@ export function BridgeView() {
             backdropFilter: 'blur(24px)',
           }}
         >
-          <p className="mb-3 text-sm font-semibold" style={{ color: 'var(--ink)' }}>Transaction steps</p>
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <p className="text-sm font-semibold" style={{ color: 'var(--ink)' }}>Transaction steps</p>
+            <span className="text-[10px] leading-tight text-right max-w-[180px]" style={{ color: 'var(--subtle)' }}>
+              Steps reflect overall Circle CCTP outcome. Per-step hashes are managed internally by the Circle SDK.
+            </span>
+          </div>
           <div style={{ borderTop: '1px solid rgba(52,211,153,0.08)' }}>
             {steps.map(s => <StepRow key={s.name} step={s} />)}
           </div>
