@@ -14,8 +14,11 @@ import {
   AUTO_ROUTE_FEE_TIERS, feeToLabel, type Token, type FeeTier,
 } from '@/constants/tokens'
 
-// Uniswap v3 SwapRouter02 — executes swaps on Arc mainnet
-// Quote and execution both use the v3 interface for consistency
+// EarthSwapRouter — deployed on Arc mainnet (v3 only; v4 swaps use SwapRouter02 directly)
+const EARTHSWAP_ROUTER = '0x23ACd156ea1A85C40631b6314fEFa9C9D369f427' as const
+void EARTHSWAP_ROUTER // reserved for future v4 router upgrade
+
+// Uniswap v3 SwapRouter02 — executes the actual swap on Arc mainnet
 const SWAP_ROUTER_ABI = [
   {
     inputs: [{ components: [
@@ -37,24 +40,44 @@ const SWAP_ROUTER_ABI = [
 import { useTokenBalance } from '@/hooks/useTokenBalance'
 import { buildTxExplorerUrl, requireChain } from '@/onchain-facts'
 
-// Uniswap v3 QuoterV1 ABI — individual args (not struct), returns uint256 amountOut
-// Deployed at UNISWAP_ADDRESSES.quoterV2 on Arc mainnet
-// Using v3 QuoterV1 keeps quote and execution on the same routing path
-const V3_QUOTER_ABI = [
+// Uniswap v4 Quoter ABI — quoteExactInputSingle with PoolKey struct
+// PoolKey = (currency0 address, currency1 address, fee uint24, tickSpacing int24, hooks address)
+// currencies MUST be sorted: lower address = currency0
+const V4_QUOTER_ABI = [
   {
-    inputs: [
-      { name: 'tokenIn',          type: 'address' },
-      { name: 'tokenOut',         type: 'address' },
-      { name: 'fee',              type: 'uint24'  },
-      { name: 'amountIn',         type: 'uint256' },
-      { name: 'sqrtPriceLimitX96', type: 'uint160' },
-    ],
+    inputs: [{
+      components: [
+        { components: [
+          { name: 'currency0', type: 'address' },
+          { name: 'currency1', type: 'address' },
+          { name: 'fee',       type: 'uint24'  },
+          { name: 'tickSpacing', type: 'int24' },
+          { name: 'hooks',     type: 'address' },
+        ], name: 'poolKey', type: 'tuple' },
+        { name: 'zeroForOne',   type: 'bool'    },
+        { name: 'exactAmount',  type: 'uint128' },
+        { name: 'hookData',     type: 'bytes'   },
+      ],
+      name: 'params', type: 'tuple',
+    }],
     name: 'quoteExactInputSingle',
-    outputs: [{ name: 'amountOut', type: 'uint256' }],
+    outputs: [
+      { name: 'amountOut',    type: 'uint256' },
+      { name: 'gasEstimate',  type: 'uint256' },
+    ],
     stateMutability: 'nonpayable',
     type: 'function',
   },
 ] as const
+
+
+// Fee tiers → tick spacing mapping for Uniswap v4 on Arc
+const FEE_TO_TICK_SPACING: Record<number, number> = {
+  100:   1,
+  500:   10,
+  3000:  60,
+  10000: 200,
+}
 
 
 const DEFAULT_SLIPPAGE = 50
@@ -244,7 +267,7 @@ export function SwapCard() {
     }
   }, [isSwapError, swapError])
 
-  // Quote fetcher — Uniswap v3 QuoterV1 (consistent with SwapRouter02 execution path)
+  // Quote fetcher — Uniswap v4 QuoterV2
   const fetchQuote = useCallback(async () => {
     if (!parsedAmountIn || parsedAmountIn === 0n) {
       setQuote(null); setQuoteError(null); return
@@ -264,37 +287,47 @@ export function SwapCard() {
         transport: http(ARC_RPC),
       })
 
-      // Try all fee tiers with v3 QuoterV1 — same router used for execution
+      // Uniswap v4: sort currencies (lower address = currency0)
+      const addrIn  = tokenIn.address.toLowerCase()
+      const addrOut = tokenOut.address.toLowerCase()
+      const zeroForOne = addrIn < addrOut
+      const currency0 = (zeroForOne ? tokenIn.address : tokenOut.address) as `0x${string}`
+      const currency1 = (zeroForOne ? tokenOut.address : tokenIn.address) as `0x${string}`
+      // Clamp to uint128 max
+      const exactAmount = parsedAmountIn > BigInt('0xffffffffffffffffffffffffffffffff')
+        ? BigInt('0xffffffffffffffffffffffffffffffff')
+        : parsedAmountIn
+
       let best: QuoteResult | null = null
       for (const fee of AUTO_ROUTE_FEE_TIERS) {
+        const tickSpacing = FEE_TO_TICK_SPACING[fee] ?? 60
         try {
           const result = await client.simulateContract({
-            address: UNISWAP_ADDRESSES.quoterV1,
-            abi: V3_QUOTER_ABI,
+            address: UNISWAP_ADDRESSES.quoterV4,
+            abi: V4_QUOTER_ABI,
             functionName: 'quoteExactInputSingle',
-            args: [
-              tokenIn.address  as `0x${string}`,
-              tokenOut.address as `0x${string}`,
-              fee,
-              parsedAmountIn,
-              0n,
-            ],
+            args: [{
+              poolKey: { currency0, currency1, fee, tickSpacing, hooks: '0x0000000000000000000000000000000000000000' },
+              zeroForOne,
+              exactAmount,
+              hookData: '0x',
+            }],
           })
-          const amountOut = result.result
+          const [amountOut] = result.result as [bigint, bigint]
           if (amountOut > 0n && (!best || amountOut > best.amountOut)) {
             best = { amountOut, fee, gasEstimate: 0n, sqrtPriceX96After: 0n }
           }
-        } catch { /* no v3 pool at this fee tier — try next */ }
+        } catch { /* no v4 pool at this tier */ }
       }
       if (best) {
         setQuote(best)
         setQuoteKey(k => k + 1)
       } else {
-        setQuoteError('No liquidity found for this pair. Try a different amount or pair.')
+        setQuoteError('No liquidity found for this pair on Uniswap v4.')
         setQuote(null)
       }
     } catch {
-      setQuoteError('Could not fetch quote. Check your network connection.')
+      setQuoteError('Could not fetch quote.')
     } finally {
       setIsQuoting(false)
     }
@@ -550,7 +583,7 @@ export function SwapCard() {
                   />
                   <DetailRow
                     label="Route"
-                    value={`EarthSwap ${tokenIn.symbol}/${tokenOut.symbol} · Uniswap v3 · ${feeToLabel(quote.fee)}`}
+                    value={`EarthSwap ${tokenIn.symbol}/${tokenOut.symbol} · Uniswap v4`}
                   />
                   <DetailRow
                     label="Settlement"
